@@ -68,7 +68,8 @@ def test_cli_protocol_and_shard_contract(tmp_path):
     assert result.exit_code==0,result.output
     assert json.loads(result.stdout)['expected_items']==541
     result=runner.invoke(app,['benchmark','--help'])
-    assert result.exit_code==0 and '--api-key-env' in result.stdout
+    from click import unstyle
+    assert result.exit_code==0 and '--api-key-env' in unstyle(result.stdout)
 
 
 def test_external_transport_preserves_error_and_remaps_model(tmp_path, monkeypatch):
