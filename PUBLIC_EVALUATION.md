@@ -251,3 +251,35 @@ Earlier configurations without this field preserve the non-thinking protocol.
 A workspace remains pinned; initialize a new workspace after the leaderboard
 switches configurations. The supplied content hash is still advisory and does not
 attest the endpoint. No private test data or private response cache is distributed.
+
+
+# Independent public evaluation
+
+The public evaluator runs benchmark semantics without the Delta League controller. Use the pinned native text, coding and BFCL adapters, or the Harbor adapter for Terminal-Bench 2.1. Fleet management, task leases, shared response caching and publication belong to the platform.
+
+Install `deltaleague[public-eval]` in a dedicated evaluator environment. Terminal-Bench also needs the `terminal-eval` extra and a Docker host; the exact tested dependency lock is `delta_cli/public_eval/terminal-requirements.txt`. The inference endpoint can run on a different machine. It must support the benchmark's operations: likelihood benchmarks require completion log probabilities, whereas agent benchmarks use chat completions.
+
+Create a `generation.json` with explicit settings, for example the Qwen thinking profile:
+
+```json
+{"enable_thinking":true,"max_tokens":8192,"temperature":0.6,"top_p":0.95,"top_k":20,"presence_penalty":0.0}
+```
+
+These settings declare a profile; they are not a claim of model-card equivalence.
+
+```sh
+delta public-eval benchmark-config --benchmark ifeval --coverage full \
+  --generation generation.json > protocol.json
+
+delta public-eval benchmark --protocol protocol.json \
+  --endpoint http://model-host:8000/v1 --model candidate \
+  --tokenizer ./tokenizer --content-hash "$MODEL_SHA256" --output ifeval-full
+```
+
+Use `--coverage sample` for the bundled representative validation selection. `--start 0 --end 64` runs a half-open ordinal shard of the declared selection, preserving native IDs and scoring. Use separate processes and output directories for concurrent benchmarks or shards. Run outputs contain the protocol, native reports, response evidence, local cache snapshot, metrics and elapsed time. Existing output directories are never silently overwritten. Local scores are advisory, not official platform submissions.
+
+For external inference, specify the endpoint's model name and `--api-key-env MODEL_API_KEY`; the value is read from the environment and is not stored in the manifest. The endpoint must accept the declared generation parameters. Provider differences do not silently change the protocol.
+
+Terminal-Bench uses `--benchmark terminal_bench_2_1`; full coverage includes all 89 pinned native tasks. Sample coverage requires one or more `--task NATIVE_TASK_ID` arguments. `--attempts 5` records five attempts per task, scored as mean pass@1. This adapter currently declares a Qwen tokenizer, 8192-token thinking, Terminus-2, native Docker environments and native verifier rewards. It preserves native task timeouts and compaction settings; it adds no overall run deadline. Infrastructure failures are retried and never silently scored as incorrect answers.
+
+Python callers use `delta_cli.public_eval.standalone.make_protocol` and `run_benchmark`. Scheduled workers use `execute` with a prepared local directory and an injected inference endpoint. Both paths use the same public modules.
