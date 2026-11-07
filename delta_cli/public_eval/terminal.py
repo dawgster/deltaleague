@@ -150,9 +150,9 @@ def evaluate(root):
         Terminus2._count_total_tokens=exact_count
     dataset=prepare_dataset(root,p)
     task_manifest=json.loads((root/'terminal-manifest.json').read_text())
-    history=History(root/'history.sqlite3')
+    history=History(root/'history.sqlite3',seed_path=config.get('history_seed_path'))
     with history.connect() as db:db.execute('PRAGMA journal_mode=WAL')
-    import_checkpoint(history,'public',root/'history-seed.sqlite3.gz')
+    if not config.get('history_seed_path'):import_checkpoint(history,'public',root/'history-seed.sqlite3.gz')
     completed=load_checkpoint(root/'terminal-seed.json.gz',config['protocol_hash'],p)
     report=root/(BENCHMARK+'.report.json.gz')
     counts=dict(requests=0,prompt_tokens=0,completion_tokens=0,truncated=0)

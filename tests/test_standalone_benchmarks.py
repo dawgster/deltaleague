@@ -89,3 +89,15 @@ def test_external_transport_preserves_error_and_remaps_model(tmp_path, monkeypat
     assert calls[0]['json']['model']=='external-model'
     assert calls[0]['headers']=={'Authorization':'Bearer private-token'}
     assert response.json()['error']['code']=='context_length_exceeded'
+
+
+def test_shared_seed_exports_only_responses_used_by_the_task(tmp_path):
+    from delta_cli.public_eval.history import History
+    seed=History(tmp_path/'seed.sqlite3')
+    response={'choices':[{'text':'done','finish_reason':'stop'}]}
+    seed.put('public','needed',response);seed.put('public','unrelated',response)
+    task=History(tmp_path/'task.sqlite3',seed_path=seed.path)
+    assert task.get('public','needed')==response
+    assert task.rows('public')=={'needed':response}
+    assert set(seed.rows('public'))=={'needed','unrelated'}
+    assert task.get('public','missing') is None

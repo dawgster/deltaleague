@@ -19,7 +19,8 @@ def namespace(files, runtime, server):
 
 
 class History:
-    def __init__(self, path):
+    def __init__(self, path, *, seed_path=None):
+        self.seed_path = Path(seed_path) if seed_path else None
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         with self.connect() as db:
@@ -38,7 +39,23 @@ class History:
     def get(self, scope, key):
         with self.connect() as db:
             row = db.execute('SELECT value FROM responses WHERE namespace=? AND key=?', (scope,key)).fetchone()
-        return json.loads(row[0]) if row else None
+        if row:
+            return json.loads(row[0])
+        if self.seed_path:
+            # A shared immutable checkpoint is read once per needed request. Keep
+            # only used responses in each task's own evidence/cache export.
+            from urllib.parse import quote
+            db = sqlite3.connect('file:'+quote(str(self.seed_path.resolve()))+'?mode=ro&immutable=1', uri=True)
+            try:
+                row = db.execute('SELECT value FROM responses WHERE namespace=? AND key=?', ('public',key)).fetchone()
+            finally:
+                db.close()
+            if row:
+                value = json.loads(row[0])
+                if not valid_response(value):raise ValueError('Invalid seeded response')
+                self.put(scope,key,value)
+                return value
+        return None
 
     def put(self, scope, key, value):
         raw = json.dumps(value, allow_nan=False)
