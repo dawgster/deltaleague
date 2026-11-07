@@ -257,7 +257,7 @@ attest the endpoint. No private test data or private response cache is distribut
 
 The public evaluator runs benchmark semantics without the Delta League controller. Use the pinned native text, coding and BFCL adapters, or the Harbor adapter for Terminal-Bench 2.1. Fleet management, task leases, shared response caching and publication belong to the platform.
 
-Install `deltaleague[public-eval]` in a dedicated evaluator environment. Terminal-Bench also needs the `terminal-eval` extra and a Docker host; the exact tested dependency lock is `delta_cli/public_eval/terminal-requirements.txt`. The inference endpoint can run on a different machine. It must support the benchmark's operations: likelihood benchmarks require completion log probabilities, whereas agent benchmarks use chat completions.
+Install `deltaleague[public-eval]` in a dedicated environment for text, coding and BFCL benchmarks. For Terminal-Bench, use a separate environment with `deltaleague[terminal-eval]` and a Docker host; the exact tested dependency lock is `delta_cli/public_eval/terminal-requirements.txt`. Keep the Harbor and BFCL dependency profiles separate rather than installing the Terminal lock over the BFCL environment. The inference endpoint can run on a different machine. It must support the benchmark's operations: likelihood benchmarks require completion log probabilities, whereas agent benchmarks use chat completions.
 
 Create a `generation.json` with explicit settings, for example the Qwen thinking profile:
 
