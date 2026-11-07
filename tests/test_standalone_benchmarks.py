@@ -101,3 +101,15 @@ def test_shared_seed_exports_only_responses_used_by_the_task(tmp_path):
     assert task.rows('public')=={'needed':response}
     assert set(seed.rows('public'))=={'needed','unrelated'}
     assert task.get('public','missing') is None
+
+
+def test_terminal_context_count_handles_harbor_initial_empty_chat():
+    from delta_cli.public_eval.terminal import context_tokens
+    class Tokenizer:
+        def apply_chat_template(self,messages,**options):
+            assert messages==[{'role':'user','content':'hello'}]
+            assert options=={'tokenize':True,'add_generation_prompt':True,'enable_thinking':True}
+            return [11,12,13]
+    tokenizer=Tokenizer()
+    assert context_tokens(tokenizer,[])==0
+    assert context_tokens(tokenizer,[{'role':'user','content':'hello'}])==3

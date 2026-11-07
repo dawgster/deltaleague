@@ -16,6 +16,14 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 BENCHMARK = 'terminal_bench_2_1'
 
 
+def context_tokens(tokenizer, messages):
+    # Harbor counts an empty Chat before populating its initial messages.
+    # There is no prompt to render yet; HF chat templates reject an empty list.
+    if not messages:return 0
+    return len(tokenizer.apply_chat_template(messages,tokenize=True,
+        add_generation_prompt=True,enable_thinking=True))
+
+
 def atomic_json(path, value):
     temp=path.with_name(path.name+'.tmp')
     temp.write_text(json.dumps(value,default=str));temp.replace(path)
@@ -146,7 +154,7 @@ def evaluate(root):
         from harbor.agents.terminus_2.terminus_2 import Terminus2
         tokenizer=AutoTokenizer.from_pretrained(str(root/'model'),trust_remote_code=False)
         def exact_count(self,chat):
-            return len(tokenizer.apply_chat_template(chat.messages,tokenize=True,add_generation_prompt=True,enable_thinking=True))
+            return context_tokens(tokenizer,chat.messages)
         Terminus2._count_total_tokens=exact_count
     dataset=prepare_dataset(root,p)
     task_manifest=json.loads((root/'terminal-manifest.json').read_text())
