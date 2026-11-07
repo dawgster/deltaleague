@@ -113,3 +113,14 @@ def test_terminal_context_count_handles_harbor_initial_empty_chat():
     tokenizer=Tokenizer()
     assert context_tokens(tokenizer,[])==0
     assert context_tokens(tokenizer,[{'role':'user','content':'hello'}])==3
+
+
+@pytest.mark.parametrize('encoded',[
+    {'input_ids':[11,12,13,14],'attention_mask':[1,1,1,1]},
+    {'input_ids':[[11,12,13,14]],'attention_mask':[[1,1,1,1]]},
+])
+def test_terminal_context_counts_tokens_not_transformers_encoding_fields(encoded):
+    from delta_cli.public_eval.terminal import context_tokens
+    class Tokenizer:
+        def apply_chat_template(self,*args,**kwargs):return encoded
+    assert context_tokens(Tokenizer(),[{'role':'user','content':'hello'}])==4

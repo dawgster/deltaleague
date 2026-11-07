@@ -10,6 +10,7 @@ import sys
 import threading
 import time
 import traceback
+from collections.abc import Mapping
 from contextlib import contextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -20,8 +21,15 @@ def context_tokens(tokenizer, messages):
     # Harbor counts an empty Chat before populating its initial messages.
     # There is no prompt to render yet; HF chat templates reject an empty list.
     if not messages:return 0
-    return len(tokenizer.apply_chat_template(messages,tokenize=True,
-        add_generation_prompt=True,enable_thinking=True))
+    encoded=tokenizer.apply_chat_template(messages,tokenize=True,
+        add_generation_prompt=True,enable_thinking=True)
+    # Transformers 5 returns BatchEncoding for this tokenizer. len(encoded)
+    # counts fields (usually two), not tokens; older versions return a list.
+    tokens=encoded['input_ids'] if isinstance(encoded,Mapping) else encoded
+    if tokens and isinstance(tokens[0],list):
+        if len(tokens)!=1:raise ValueError('Expected one conversation for token counting')
+        tokens=tokens[0]
+    return len(tokens)
 
 
 def atomic_json(path, value):
