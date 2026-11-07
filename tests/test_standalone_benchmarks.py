@@ -124,3 +124,11 @@ def test_terminal_context_counts_tokens_not_transformers_encoding_fields(encoded
     class Tokenizer:
         def apply_chat_template(self,*args,**kwargs):return encoded
     assert context_tokens(Tokenizer(),[{'role':'user','content':'hello'}])==4
+
+
+def test_terminal_sandbox_names_isolate_concurrent_runs_and_retries(tmp_path):
+    from delta_cli.public_eval.terminal import trial_name
+    first=trial_name(tmp_path/'one','task',0,0)
+    assert first==trial_name(tmp_path/'one','task',0,0)
+    assert first!=trial_name(tmp_path/'two','task',0,0)
+    assert first!=trial_name(tmp_path/'one','task',0,1)

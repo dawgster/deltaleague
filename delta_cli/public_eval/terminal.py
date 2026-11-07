@@ -32,6 +32,13 @@ def context_tokens(tokenizer, messages):
     return len(tokens)
 
 
+def trial_name(root, task, attempt, retry):
+    # Harbor uses the trial name as its Docker Compose project. Different
+    # concurrent runs of the same case must never share a sandbox name.
+    run_key=hashlib.sha256(str(Path(root).resolve()).encode()).hexdigest()[:12]
+    return f'{task}__a{attempt}r{retry}__{run_key}'
+
+
 def atomic_json(path, value):
     temp=path.with_name(path.name+'.tmp')
     temp.write_text(json.dumps(value,default=str));temp.replace(path)
@@ -207,7 +214,7 @@ def evaluate(root):
                     async with semaphore:
                         with agent_endpoint(proxy,p,attempt) as endpoint:
                             for retry in range(4):
-                                name=f'{task}__a{attempt}r{retry}'
+                                name=trial_name(root,task,attempt,retry)
                                 cfg=trial_config(dataset/task,root/'trials',name,endpoint,p)
                                 try:
                                     trial=await Trial.create(cfg)
