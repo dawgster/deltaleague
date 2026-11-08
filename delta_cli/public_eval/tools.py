@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 from .common import digest
+from .bfcl_errors import ContextExhausted
 
 ALLOWED_SIMULATORS = {'gorilla_file_system', 'math_api', 'message_api', 'posting_api',
                       'ticket_api', 'trading_bot', 'travel_booking', 'vehicle_control'}
@@ -65,6 +66,19 @@ def handler_for(model, tokenizer=None, endpoint=None, generation=None):
     return handler, alias
 
 
+def infer_entry(handler, row):
+    try:
+        result,metadata=handler.inference(row,include_input_log=True,exclude_state_log=False)
+    except ContextExhausted as exc:
+        # Native BFCL generation records an inference-error string for this case.
+        # The native multi-turn checker counts it as invalid, retaining coverage.
+        # Do not catch generic ValueError, HTTP failures, or simulator bugs.
+        result='Error during inference: '+str(exc)
+        metadata={'error_type':'context_exhausted','prompt_tokens':exc.prompt_tokens,
+                  'context_limit':exc.context_limit,'context_policy':'native-case-failure-v1'}
+    return {'id':row['id'],'result':result,**metadata}
+
+
 def run(manifest, endpoint, model, tokenizer, output, *, concurrency=32, generation=None):
     from bfcl_eval.utils import load_dataset_entry, load_ground_truth_entry
     from bfcl_eval.eval_checker.eval_runner import (
@@ -82,13 +96,8 @@ def run(manifest, endpoint, model, tokenizer, output, *, concurrency=32, generat
         if [digest(r) for r in selected] != spec['doc_sha256']:
             raise ValueError(f'BFCL {category}: selected entries changed')
 
-        def infer(row):
-            # Infrastructure errors fail the run; they must not become model zeros.
-            result, metadata = handler.inference(row, include_input_log=True, exclude_state_log=False)
-            return {'id': row['id'], 'result': result, **metadata}
-
         with ThreadPoolExecutor(max_workers=min(concurrency, len(selected))) as pool:
-            generated = list(pool.map(infer, selected))
+            generated = list(pool.map(lambda row: infer_entry(handler,row), selected))
         (directory / f'{category}.responses.json').write_text(json.dumps(generated, default=str, indent=2))
         # Reload because the official generator modifies entries in place.
         prompts = load_dataset_entry(category, include_prereq=False, include_language_specific_hint=False)
@@ -105,7 +114,8 @@ def run(manifest, endpoint, model, tokenizer, output, *, concurrency=32, generat
                 accuracy, count = ast_file_runner(handler, generated, selected, truth, category, alias, directory)
         if count != spec['count']:
             raise ValueError(f'Incomplete BFCL result for {category}')
-        scores[category] = {'accuracy': accuracy, 'count': count}
+        scores[category] = {'accuracy': accuracy, 'count': count,
+            'context_exhausted':sum(row.get('error_type')=='context_exhausted' for row in generated)}
     report = {'suite_sha256': manifest['sha256'], 'model': model, 'scores': scores,
               'protocol': 'BFCL native AST and multi-turn state/response, Qwen tokenizer template',
               'generation': generation or {'enable_thinking': False, 'temperature': 0, 'max_tokens': 4096},

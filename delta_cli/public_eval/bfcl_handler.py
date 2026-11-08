@@ -3,6 +3,7 @@ from bfcl_eval.model_handler.local_inference.qwen_fc import QwenFCHandler
 from overrides import override
 import threading
 from .bfcl_tool_calls import normalize_tool_calls
+from .bfcl_errors import ContextExhausted
 
 
 class Qwen35Handler(QwenFCHandler):
@@ -27,9 +28,10 @@ class Qwen35Handler(QwenFCHandler):
         from .generation import sampling
         prompt = self._format_prompt(inference_data['message'], inference_data['function'])
         inference_data['inference_input_log'] = {'formatted_prompt': prompt}
-        available = self.max_context_length - len(self.tokenizer.tokenize(prompt)) - 2
+        prompt_tokens=len(self.tokenizer.tokenize(prompt))
+        available = self.max_context_length - prompt_tokens - 2
         if available < 1:
-            raise ValueError('BFCL context exhausted')
+            raise ContextExhausted(prompt_tokens,self.max_context_length)
         options = sampling(generation)
         extra = {key: options.pop(key) for key in list(options) if key not in ('temperature', 'top_p', 'presence_penalty')}
         for key in ('stop_token_ids', 'skip_special_tokens'):
