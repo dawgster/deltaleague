@@ -75,4 +75,10 @@ the private test (leader: 61.6 proxy vs 50.4 private). Public 18-benchmark valid
 
 ## Submission
 
-Submission `ba02dd30-c06e-46ae-9bb7-a0678a026030` (submitted 2026-11-08, parent `ac147fa6`). Verified result: pending.
+Submission `ba02dd30-c06e-46ae-9bb7-a0678a026030` (submitted 2026-11-08, parent `ac147fa6`). Verified result (model version `4e108bb5`): **private test 44.0** (parent 50.4), truncation 21.4% (parent 14.4%),
+public validation 42.24 (parent 43.45). **The graft is harmful on the official evaluation (−6.4)** despite +0.8 on the local proxy.
+
+Likely cause: the probe and its bias were fit only on proxy prompts (GSM8K/MATH-500/ARC-C with one instruction suffix). On
+other prompt formats the score s shifts negative, so the graft becomes a net push *against* `</think>` and truncation rises
+— the same failure seen locally at κ=8 with the decision-boundary switch. A switch like this needs calibration across prompt
+distributions (or a bias-free, zero-mean write) before it can be trusted off-proxy. Recorded as a negative result.
