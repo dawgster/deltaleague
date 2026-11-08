@@ -78,7 +78,9 @@ def execute(root):
         evaluate(root)
         return json.loads((root/'summary.json').read_text())
     from .benchmark import evaluate
-    return evaluate(root)
+    from .dataset_mirror import use_sources
+    with use_sources(config):
+        return evaluate(root)
 
 
 def run_benchmark(*, protocol, endpoint, model, tokenizer, content_hash, output,
