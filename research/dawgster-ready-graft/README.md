@@ -75,4 +75,4 @@ the private test (leader: 61.6 proxy vs 50.4 private). Public 18-benchmark valid
 
 ## Submission
 
-TBD (added after `delta submit ... --pr`).
+Submission `ba02dd30-c06e-46ae-9bb7-a0678a026030` (submitted 2026-11-08, parent `ac147fa6`). Verified result: pending.
