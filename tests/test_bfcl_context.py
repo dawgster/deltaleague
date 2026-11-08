@@ -55,3 +55,8 @@ def test_native_shard_keeps_all_exhausted_cases_in_denominator(tmp_path,monkeypa
     assert sum(v['count'] for v in result['scores'].values())==8
     assert sum(v['context_exhausted'] for v in result['scores'].values())==8
     assert all(v['accuracy']==0 for v in result['scores'].values())
+
+
+def test_context_failure_cannot_be_credited_as_single_turn_irrelevance():
+    def infer(row,**kwargs):raise ContextExhausted(35000,34816)
+    with pytest.raises(ContextExhausted):infer_entry(SimpleNamespace(inference=infer),{'id':'irrelevance_0'})

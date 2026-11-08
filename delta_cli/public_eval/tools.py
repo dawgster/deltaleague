@@ -70,6 +70,7 @@ def infer_entry(handler, row):
     try:
         result,metadata=handler.inference(row,include_input_log=True,exclude_state_log=False)
     except ContextExhausted as exc:
+        if not row['id'].startswith('multi_turn_'):raise
         # Native BFCL generation records an inference-error string for this case.
         # The native multi-turn checker counts it as invalid, retaining coverage.
         # Do not catch generic ValueError, HTTP failures, or simulator bugs.
