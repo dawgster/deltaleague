@@ -141,6 +141,12 @@ async def prepare_verifier_dependencies(trial, evidence_path):
     command="""set -eu
 if command -v apt-get >/dev/null; then
   printf 'DPkg::Lock::Timeout "600";\\nAcquire::Retries "3";\\n' > /etc/apt/apt.conf.d/99-terminal-verifier-retries
+  # Bullseye security package versions remain available in Debian's archive.
+  if grep -q 'VERSION_CODENAME=bullseye' /etc/os-release; then
+    for source in /etc/apt/sources.list /etc/apt/sources.list.d/*.list; do
+      [ ! -f "$source" ] || sed -i 's|http://deb.debian.org/debian-security|https://archive.debian.org/debian-security|g; s|https://deb.debian.org/debian-security|https://archive.debian.org/debian-security|g; s|http://security.debian.org/debian-security|https://archive.debian.org/debian-security|g; s|https://security.debian.org/debian-security|https://archive.debian.org/debian-security|g' "$source"
+    done
+  fi
   apt-get -o APT::Update::Error-Mode=any update
 fi
 """
