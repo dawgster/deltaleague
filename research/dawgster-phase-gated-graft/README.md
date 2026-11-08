@@ -53,3 +53,15 @@ The harness length-cap rate drops on IFEval (12.1% → 6.2%) and MBPP (11.7% →
   - Rescoring feeds the cached outputs back through the official lm-eval filters and the WASI code sandbox.
 
 This PR contains no weights, credentials, signed URLs, private data or raw generations.
+
+## Verified result
+
+The submission was `1020e203-502f-4101-bb7a-860114638f05` (version `fdad0374`).
+
+| | Private test | Validation |
+|---|---|---|
+| This patch | **50.8** (rank 1) | 44.55 |
+| Parent ac147fa6 | 50.4 | 43.45 |
+| Ungated graft (#65) | 44.0 | — |
+
+Gating recovered the 6.8 points the ungated graft lost. The +0.4 margin over the parent is within the ±2.2 run noise.
