@@ -113,6 +113,42 @@ def valid_reward(result):
     return float(reward)
 
 
+
+def validate_verifier_evidence(evidence):
+    """Pinned Terminal-Bench tests emit CTRF even when assertions fail.
+
+    A shell reward of zero without a test report is a bootstrap failure, not
+    evidence of a failed model solution. Collection errors remain native zeros.
+    """
+    try:
+        report=json.loads(evidence['verifier/ctrf.json'])['results']
+        summary=report['summary'];tests=report['tests']
+        if not isinstance(tests,list) or not isinstance(summary,dict):raise ValueError()
+        for field in ('tests','passed','failed'):
+            if type(summary.get(field)) is not int or summary[field]<0:raise ValueError()
+    except (KeyError,TypeError,ValueError) as exc:
+        raise RuntimeError('Verifier infrastructure failure: missing or malformed native CTRF report') from exc
+    return report
+
+
+async def prepare_verifier_dependencies(trial, evidence_path):
+    """Refresh Debian metadata and wait for package locks before native tests.
+
+    Runs after the agent, changes no task artifacts or native assertions, and
+    records its output separately. The native verifier still installs its own
+    exact dependencies and computes its own reward.
+    """
+    command="""set -eu
+if command -v apt-get >/dev/null; then
+  printf 'DPkg::Lock::Timeout "600";\\nAcquire::Retries "3";\\n' > /etc/apt/apt.conf.d/99-terminal-verifier-retries
+  apt-get -o APT::Update::Error-Mode=any update
+fi
+"""
+    result=await trial.agent_environment.exec(command,timeout_sec=900,user='root')
+    evidence_path.parent.mkdir(parents=True,exist_ok=True)
+    evidence_path.write_text(str(result.stdout or '')+'\n'+str(result.stderr or ''))
+    if result.return_code:raise RuntimeError('Verifier dependency preparation failed')
+
 def load_checkpoint(path, protocol_hash, protocol):
     if not path.exists():return {}
     with gzip.open(path,'rt') as f:data=json.load(f)
@@ -223,14 +259,20 @@ def evaluate(root):
                                 cfg=trial_config(dataset/task,root/'trials',name,endpoint,p)
                                 try:
                                     trial=await Trial.create(cfg)
+                                    from harbor.trial.hooks import TrialEvent
+                                    async def verifier_ready(event):
+                                        await prepare_verifier_dependencies(trial,root/'trials'/name/'verifier-bootstrap.txt')
+                                    trial.add_hook(TrialEvent.VERIFICATION_START,verifier_ready)
                                     result=await trial.run()
+                                    evidence=task_evidence(root/'trials'/name)
+                                    validate_verifier_evidence(evidence)
                                     reward=valid_reward(result)
                                     native=result.model_dump(mode='json')
                                     image=task_manifest['tasks'][task]['environment'].get('docker_image')
                                     inspection=subprocess.run(['docker','image','inspect',image],capture_output=True,text=True) if image else None
                                     image_identity=json.loads(inspection.stdout) if inspection and inspection.returncode==0 else []
                                     row={'task':task,'attempt':attempt,'reward':reward,'native_result':native,'container_image_identity':image_identity,
-                                        'evidence':task_evidence(root/'trials'/name)}
+                                        'evidence':evidence}
                                     with lock:completed[key]=row;checkpoint();progress()
                                     if image:
                                         try:subprocess.run(['docker','image','rm',image],capture_output=True,timeout=120)
