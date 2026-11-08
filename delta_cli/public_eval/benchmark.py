@@ -28,7 +28,7 @@ def read_native_evidence(path):
         return [json.loads(line) for line in text.splitlines() if line.strip()]
 
 
-def evaluate(root):
+def evaluate(root, phase_callback=None):
     from .history import History, ResponseProxy, export_checkpoint, import_checkpoint
     config = json.loads((root/'manifest.json').read_text())
     history = History(root/'history.sqlite3',seed_path=config.get('history_seed_path'))
@@ -64,7 +64,7 @@ def evaluate(root):
                 except Exception: traceback.print_exc()
         thread = threading.Thread(target=snapshot, daemon=True);thread.start()
         try:
-            summary = evaluate_with_proxy(root, proxy)
+            summary = evaluate_with_proxy(root, proxy, phase_callback=phase_callback)
             summary[group]['performance'].update(counts, reused_requests=proxy.hits, new_requests=proxy.misses)
             temp=root/'summary.tmp';temp.write_text(json.dumps(summary,default=str));temp.replace(root/'summary.json')
             return summary
@@ -73,7 +73,7 @@ def evaluate(root):
             export_checkpoint(history, 'public', root/'history.sqlite3.gz')
 
 
-def evaluate_with_proxy(root, proxy):
+def evaluate_with_proxy(root, proxy, phase_callback=None):
     from contextlib import ExitStack
     from unittest.mock import patch
     import httpx
@@ -146,7 +146,7 @@ def evaluate_with_proxy(root, proxy):
             metrics = {'primary_metric':'pass@1','score_percent':100*result['score']}
         else:
             result = tools.run(expanded,proxy.endpoint,'candidate',str(root/'model'),output,
-                               concurrency=config.get('task_concurrency',p['concurrency']),generation=generation)
+                               concurrency=config.get('task_concurrency',p['concurrency']),generation=generation,phase_callback=phase_callback)
             total = sum(v['count'] for v in result['scores'].values())
             if total != expected: raise ValueError('Incomplete BFCL coverage')
             metrics = {'primary_metric':'accuracy','score_percent':100*sum(v['accuracy']*v['count'] for v in result['scores'].values())/total,
@@ -155,6 +155,7 @@ def evaluate_with_proxy(root, proxy):
             result['scope'] = 'Full covered public BFCL tracks; excludes web search and memory'
             result['evidence'] = {str(f.relative_to(output.with_suffix(''))):read_native_evidence(f)
                                   for f in output.with_suffix('').rglob('*.json')}
+    if phase_callback: phase_callback('scoring')
     with gzip.open(root/(group+'.report.json.gz'),'wt') as stream: json.dump(result,stream,default=str)
     return {group:{'completed_items':expected,'expected_items':expected,'metrics':metrics,
                    'performance':{'wallclock_seconds':time.monotonic()-started}}}

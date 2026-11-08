@@ -63,7 +63,7 @@ def make_protocol(benchmark, generation, *, coverage='sample', concurrency=8,
     return p
 
 
-def execute(root):
+def execute(root, phase_callback=None):
     """Run one prepared public benchmark or shard and return native summary metrics.
 
     The directory contract contains only local protocol/data/cache files and an
@@ -76,11 +76,12 @@ def execute(root):
         if version('harbor') != config['protocol']['harbor_version']:
             raise ValueError('Harbor version differs from the declared protocol')
         evaluate(root)
+        if phase_callback: phase_callback('scoring')
         return json.loads((root/'summary.json').read_text())
     from .benchmark import evaluate
     from .dataset_mirror import use_sources
     with use_sources(config):
-        return evaluate(root)
+        return evaluate(root, phase_callback=phase_callback)
 
 
 def run_benchmark(*, protocol, endpoint, model, tokenizer, content_hash, output,

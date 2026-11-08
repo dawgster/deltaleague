@@ -60,3 +60,25 @@ def test_native_shard_keeps_all_exhausted_cases_in_denominator(tmp_path,monkeypa
 def test_context_failure_cannot_be_credited_as_single_turn_irrelevance():
     def infer(row,**kwargs):raise ContextExhausted(35000,34816)
     with pytest.raises(ContextExhausted):infer_entry(SimpleNamespace(inference=infer),{'id':'irrelevance_0'})
+
+
+def test_phase_after_all_categories_before_native_scoring(tmp_path,monkeypatch):
+    pytest.importorskip('bfcl_eval.eval_checker.eval_runner',exc_type=ImportError)
+    from delta_cli.public_eval import tools
+    from delta_cli.public_eval.suite import manifest
+    from delta_cli.public_eval.coverage import expand,slice_suite
+    from bfcl_eval.eval_checker import eval_runner
+    # Boundary crosses categories to catch an unsafe per-category release.
+    suite=slice_suite(expand(manifest(),'bfcl_multi_turn'),'bfcl_multi_turn',[198,202])
+    events=[]
+    def infer(row,**kwargs):
+        events.append('inference');raise ContextExhausted(35000,34816)
+    monkeypatch.setattr(tools,'handler_for',lambda *a,**kw:(SimpleNamespace(inference=infer),'DeltaQwen35Validation'))
+    original=eval_runner.multi_turn_runner
+    def score(*args,**kwargs):
+        assert events.count('inference')==4 and 'scoring' in events
+        events.append('native_score');return original(*args,**kwargs)
+    monkeypatch.setattr(eval_runner,'multi_turn_runner',score)
+    result=tools.run(suite,'http://unused','candidate','unused',tmp_path/'report.json',concurrency=4,phase_callback=events.append)
+    assert events==['inference']*4+['scoring']+['native_score']*2
+    assert sum(v['count'] for v in result['scores'].values())==4

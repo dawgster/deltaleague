@@ -80,7 +80,7 @@ def infer_entry(handler, row):
     return {'id':row['id'],'result':result,**metadata}
 
 
-def run(manifest, endpoint, model, tokenizer, output, *, concurrency=32, generation=None):
+def run(manifest, endpoint, model, tokenizer, output, *, concurrency=32, generation=None, phase_callback=None):
     from bfcl_eval.utils import load_dataset_entry, load_ground_truth_entry
     from bfcl_eval.eval_checker.eval_runner import (
         ast_file_runner, multi_turn_runner, relevance_file_runner)
@@ -90,6 +90,7 @@ def run(manifest, endpoint, model, tokenizer, output, *, concurrency=32, generat
     directory = output.with_suffix('')
     directory.mkdir(parents=True, exist_ok=True)
     scores = {}
+    generated_categories = {}
     for category, spec in manifest['bfcl'].items():
         rows = load_dataset_entry(category)
         by_id = {r['id']: r for r in rows}
@@ -100,6 +101,10 @@ def run(manifest, endpoint, model, tokenizer, output, *, concurrency=32, generat
         with ThreadPoolExecutor(max_workers=min(concurrency, len(selected))) as pool:
             generated = list(pool.map(lambda row: infer_entry(handler,row), selected))
         (directory / f'{category}.responses.json').write_text(json.dumps(generated, default=str, indent=2))
+        generated_categories[category] = generated
+    if phase_callback: phase_callback('scoring')
+    for category, spec in manifest['bfcl'].items():
+        generated = generated_categories[category]
         # Reload because the official generator modifies entries in place.
         prompts = load_dataset_entry(category, include_prereq=False, include_language_specific_hint=False)
         positions = {r['id']: i for i, r in enumerate(prompts)}
