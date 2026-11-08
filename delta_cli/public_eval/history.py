@@ -114,8 +114,12 @@ class ResponseProxy:
         self.lock = threading.Lock()
         self.locks = [threading.Lock() for _ in range(128)]
         history.import_rows(scope, {key:value for key,value in (seed or {}).items() if valid_response(value)})
+        import httpx
+        self.client=httpx.Client(timeout=request_timeout,limits=httpx.Limits(max_connections=128,max_keepalive_connections=32))
         owner = self
         class Handler(BaseHTTPRequestHandler):
+            protocol_version="HTTP/1.1"
+            disable_nagle_algorithm=True
             def log_message(self, *args):
                 pass
 
@@ -134,9 +138,9 @@ class ResponseProxy:
                     with owner.locks[int(key[:8],16) % len(owner.locks)]:
                         response = history.get(scope, key)
                         if response is None:
-                            result = httpx.post(owner.upstream+self.path, json=request, timeout=request_timeout, headers=headers)
+                            result = owner.client.post(owner.upstream+self.path, json=request, timeout=request_timeout, headers=headers)
                             if result.status_code != 200:
-                                self.send_response(result.status_code);self.end_headers();self.wfile.write(result.content)
+                                self.send_response(result.status_code);self.send_header('Content-Length',str(len(result.content)));self.end_headers();self.wfile.write(result.content)
                                 return
                             response = result.json()
                             if not valid_response(response):
@@ -151,8 +155,10 @@ class ResponseProxy:
                     self.send_response(200);self.send_header('Content-Type','application/json')
                     self.send_header('Content-Length',str(len(body)));self.end_headers();self.wfile.write(body)
                 except Exception:
-                    self.send_response(502);self.end_headers()
-        self.server = ThreadingHTTPServer(('127.0.0.1',0), Handler)
+                    self.send_response(502);self.send_header('Content-Length','0');self.send_header('Connection','close');self.end_headers();self.close_connection=True
+        class Server(ThreadingHTTPServer):
+            request_queue_size=128
+        self.server = Server(('127.0.0.1',0), Handler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
 
     def __enter__(self):
@@ -164,7 +170,7 @@ class ResponseProxy:
         return 'http://127.0.0.1:'+str(self.server.server_port)+'/v1'
 
     def __exit__(self, *args):
-        self.server.shutdown();self.server.server_close();self.thread.join()
+        self.server.shutdown();self.server.server_close();self.thread.join();self.client.close()
 
 
 def export_checkpoint(history, scope, destination):

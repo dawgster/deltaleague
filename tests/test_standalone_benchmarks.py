@@ -75,13 +75,13 @@ def test_cli_protocol_and_shard_contract(tmp_path):
 def test_external_transport_preserves_error_and_remaps_model(tmp_path, monkeypatch):
     import httpx
     from delta_cli.public_eval.history import History,ResponseProxy
-    original=httpx.post;calls=[]
+    original=httpx.Client.post;calls=[]
     monkeypatch.setenv('TEST_MODEL_KEY','private-token')
-    def post(url,**kwargs):
-        if url.startswith('http://127.0.0.1:'):return original(url,**kwargs)
+    def post(self,url,**kwargs):
+        if url.startswith('http://127.0.0.1:'):return original(self,url,**kwargs)
         calls.append(kwargs)
         return httpx.Response(400,json={'error':{'code':'context_length_exceeded'}})
-    monkeypatch.setattr(httpx,'post',post)
+    monkeypatch.setattr(httpx.Client,'post',post)
     with ResponseProxy(History(tmp_path/'cache.sqlite3'),'public',upstream='https://model.invalid',
                        upstream_model='external-model',api_key_env='TEST_MODEL_KEY') as proxy:
         response=httpx.post(proxy.endpoint+'/chat/completions',json={'model':'candidate','messages':[]})
