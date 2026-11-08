@@ -144,8 +144,13 @@ def prepare_dataset(root, protocol):
     if manifest['revision']!=protocol['dataset_revision']:raise ValueError('Dataset revision mismatch')
     dataset=root/'dataset'
     if not dataset.exists():
-        response=httpx.get('https://codeload.github.com/harbor-framework/terminal-bench-2-1/tar.gz/'+manifest['revision'],timeout=180)
+        config=json.loads((root/'manifest.json').read_text())
+        mirror=config.get('terminal_dataset_source')
+        if mirror and mirror['revision']!=manifest['revision']:raise ValueError('Terminal mirror revision mismatch')
+        url=mirror['url'] if mirror else 'https://codeload.github.com/harbor-framework/terminal-bench-2-1/tar.gz/'+manifest['revision']
+        response=httpx.get(url,timeout=180)
         response.raise_for_status()
+        if mirror and hashlib.sha256(response.content).hexdigest()!=mirror['sha256']:raise ValueError('Terminal mirror integrity')
         with tarfile.open(fileobj=io.BytesIO(response.content),mode='r:gz') as archive:
             archive.extractall(root/'source',filter='data')
         (root/'source'/('terminal-bench-2-1-'+manifest['revision'])/'tasks').rename(dataset)
